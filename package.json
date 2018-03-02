@@ -1,0 +1,25 @@
+{
+  "name": "mambo-tile-api",
+  "version": "1.0.0-SNAPSHOT",
+  "description": "Tile server for mambo using tilestrata",
+  "main": "index.js",
+  "dependencies": {
+    "@mapbox/mbtiles": "^0.9.0",
+    "body-parser": "^1.18.2",
+    "express": "^4.16.2",
+    "sharp": "^0.19.1",
+    "tilestrata": "^2.1.2",
+    "tilestrata-dependency": "^0.5.1",
+    "tilestrata-disk": "^0.5.0",
+    "tilestrata-mapnik": "^0.4.1",
+    "tilestrata-proxy": "^0.5.1",
+    "tilestrata-sharp": "^1.0.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "start": "node index",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "HAND Team",
+  "license": "Apache 2.0"
+}
