@@ -5,7 +5,9 @@
   "main": "index.js",
   "dependencies": {
     "@mapbox/mbtiles": "^0.9.0",
+    "axios": "^0.18.0",
     "body-parser": "^1.18.2",
+    "cors": "^2.8.4",
     "express": "^4.16.2",
     "sharp": "^0.19.1",
     "tilestrata": "^2.1.2",

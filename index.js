@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const bodyParser = require('body-parser')
 const tilestrata = require('tilestrata');
 const dependency = require('tilestrata-dependency');
@@ -7,7 +8,7 @@ const sharp = require('tilestrata-sharp');
 const proxy = require('tilestrata-proxy');
 const mbtiles = require('./lib/tilestrataMBTiles');
 const layerStorage = require('./lib/layerStorage');
-
+const assetStorage = require('./lib/assetStorage');
 const conf = require('./conf/conf');
 
 let app;
@@ -53,6 +54,52 @@ const createProxyLayer = (strata, layer) => {
   }
 };
 
+const createVectorProxyLayer = (strata, layer) => {
+  console.log('Adding vector proxy layer ' + layer.name);
+
+  for (let k in layer.sources) {
+    let handler = strata.layer(layer.name + '-' + k);
+    handler.route('*.pbf')
+        .use(disk.cache({dir: conf.dataPath + '/' + layer.name + '-' + k}))
+        .use(proxy({uri: layer.sources[k].tiles[0], decompress: 'always'}));
+    app.get('/glyphs/' + layer.name + '/:fontstack/:range.pbf', (req, res) => {
+      let params = {
+        fontstack: req.params.fontstack,
+        range: req.params.range,
+        layer: layer.name,
+        type: 'glyphs'
+      };
+      assetStorage.getGlyphs(params).then((data) => {
+        res.send(data);
+      }, (err) => {
+        console.log(err);
+        res.send(500);
+      });
+    });
+
+    app.get('/sprites/' + layer.name + ':filename', (req, res) => {
+      let params = {
+        layer: layer.name,
+        type: 'sprite',
+        filename: req.params.filename
+      };
+      assetStorage.getSprite(params).then((data) => {
+        console.log("sprite");
+        res.send(data);
+      }, (err) => {
+        console.log(err);
+        res.send(500);
+      });
+    });
+
+    app.get('/maps/' + layer.name + '/style.json', (req, res) => {
+      layerStorage.getLayers().then((layers) => {
+        res.send(JSON.stringify(layers[layer.name].style));
+      })
+    });
+  }
+};
+
 const createMBTilesLayer = (strata, layer) => {
   console.log('Adding MBTiles layer ' + layer.name);
   strata.layer(layer.name)
@@ -77,14 +124,22 @@ function onLayerAdd(req, res) {
       console.log('Will add Tiles layer ' + layer.name);
       break;
     case 'proxy':
-      if  (!layer.source) {
+      if (!layer.source) {
         return res.end(400);
       }
       console.log('Will add proxy layer ' + layer.name);
   }
-  layerStorage.addLayer(layer);
-  res.end();
-  resetTileServer();
+
+  layerStorage.addLayer(Object.assign({}, {
+    name: layer.name,
+    type: layer.type,
+    source: layer.source,
+    retina: layer.retina,
+    vector: layer.vector
+  })).then(() => {
+    res.end();
+    resetTileServer();
+  });
 }
 
 function onLayerDelete(req, res) {
@@ -92,9 +147,13 @@ function onLayerDelete(req, res) {
     return res.end(400);
   }
   console.log('Will remove layer ' + req.params.name);
-  layerStorage.deleteLayer(req.params.name);
-  res.end();
-  resetTileServer();
+  layerStorage.deleteLayer(req.params.name).then(() => {
+    res.end();
+    resetTileServer();
+  }).catch(() => {
+    res.send(500);
+  });
+
 }
 
 function onLayerCacheFlush(req, res) {
@@ -102,13 +161,19 @@ function onLayerCacheFlush(req, res) {
     return res.end(400);
   }
   console.log('Will flush cache data for layer ' + req.params.name);
-  layerStorage.flushCache(req.params.name);
-  res.end();
+  layerStorage.flushCache(req.params.name).then(() => {
+    res.end();
+  }).catch(() => {
+    res.send(500);
+  });
+
 }
 
 function onLayersGet(req, res) {
-  layerStorage.getLayers((layers) => {
+  layerStorage.getLayersPublic().then((layers) => {
     res.send(layers);
+  }).catch(() => {
+    res.send(500);
   });
 }
 
@@ -122,34 +187,49 @@ function resetTileServer() {
 
 function initTileServer() {
   let strata = tilestrata();
-  layerStorage.getLayers((layers) => {
-    console.log('Layers retrieved');
-    for (let l in layers) {
-      const layer = Object.assign({"name": l}, layers[l]);
-      switch (layer.type) {
-        case "tiles":
-          createTilesLayer(strata, layer);
-          break;
-        case "mbtiles":
-          createMBTilesLayer(strata, layer);
-          break;
-        case "proxy":
-          createProxyLayer(strata, layer);
-          break;
-      }
-    }
-    app = express();
-    app.use(tilestrata.middleware({
-      server: strata,
-      prefix: '/maps'
-    }));
-    app.get('/layers', onLayersGet);
-    app.post('/layers', bodyParser.json(), onLayerAdd);
-    app.delete('/layers/:name', onLayerDelete);
-    app.delete('/layers/flush/:name', onLayerCacheFlush);
-    server = app.listen(3000, () => console.log('App listening on port 3000!'));
-  });
+  app = express();
+  app.use(cors());
   
+  layerStorage.getLayers()
+      .then((layers) => {
+        console.log('Layers retrieved');
+        for (let l in layers) {
+          const layer = Object.assign({"name": l}, layers[l]);
+          switch (layer.type) {
+            case "tiles":
+              createTilesLayer(strata, layer);
+              break;
+            case "mbtiles":
+              createMBTilesLayer(strata, layer);
+              break;
+            case "proxy":
+              if (layer.vector) {
+                createVectorProxyLayer(strata, layer);
+              } else {
+                createProxyLayer(strata, layer);
+              }
+              break;
+          }
+        }
+
+        app.use(tilestrata.middleware({
+          server: strata,
+          prefix: '/maps'
+        }));
+
+        app.get('/layers', onLayersGet);
+        app.post('/layers', bodyParser.json(), onLayerAdd);
+        app.delete('/layers/:name', onLayerDelete);
+        app.delete('/layers/flush/:name', onLayerCacheFlush);
+        server = app.listen(3000, () => console.log('App listening on port 3000!'));
+      })
+      .catch(() => {
+        res.send(500);
+      });
 }
 
-initTileServer();
+layerStorage.init()
+    .then(() => {
+      initTileServer();
+    });
+
