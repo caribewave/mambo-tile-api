@@ -2,114 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser')
 const tilestrata = require('tilestrata');
-const dependency = require('tilestrata-dependency');
-const disk = require('tilestrata-disk');
-const sharp = require('tilestrata-sharp');
 const proxy = require('tilestrata-proxy');
 const mbtiles = require('./lib/tilestrataMBTiles');
 const layerStorage = require('./lib/layerStorage');
 const assetStorage = require('./lib/assetStorage');
-const conf = require('./conf/conf');
+const layerUtils = require('./lib/layerUtils');
 
 let app;
 let server;
-
-const createTilesLayer = (strata, layer) => {
-  console.log('Adding tiles layer ' + layer.name);
-  let handler = strata.layer(layer.name);
-  if (layer.retina) {
-    handler
-        .route('*@2x.png')
-        .use(disk.cache({dir: conf.dataPath + '/' + layer.name}))
-        .route('*.png')
-        .use(disk.cache({dir: conf.dataPath + '/' + layer.name}))
-        .use(dependency(layer.name, '*@2x.png'))
-        .use(sharp((image, sharp) => {
-          return image.resize(256);
-        }));
-  }
-  else {
-    handler.route('*.png').use(disk.cache({dir: conf.dataPath + '/' + layer.name}));
-  }
-};
-
-const createProxyLayer = (strata, layer) => {
-  console.log('Adding proxy layer ' + layer.name);
-  let handler = strata.layer(layer.name);
-  if (layer.retina) {
-    handler.route('*@2x.png')
-        .use(disk.cache({dir: conf.dataPath + '/' + layer.name}))
-        .use(proxy({uri: layer.source}))
-        .route('*.png')
-        .use(disk.cache({dir: conf.dataPath + '/' + layer.name}))
-        .use(dependency(layer.name, '*@2x.png'))
-        .use(sharp((image, sharp) => {
-          return image.resize(256);
-        }));
-  }
-  else {
-    handler.route('*.png')
-        .use(disk.cache({dir: conf.dataPath + '/' + layer.name}))
-        .use(proxy({uri: layer.source}));
-  }
-};
-
-const createVectorProxyLayer = (strata, layer) => {
-  console.log('Adding vector proxy layer ' + layer.name);
-
-  for (let k in layer.sources) {
-    let handler = strata.layer(layer.name + '-' + k);
-    handler.route('*.pbf')
-        .use(disk.cache({dir: conf.dataPath + '/' + layer.name + '-' + k}))
-        .use(proxy({uri: layer.sources[k].tiles[0], decompress: 'always'}));
-    app.get('/glyphs/' + layer.name + '/:fontstack/:range.pbf', (req, res) => {
-      let params = {
-        fontstack: req.params.fontstack,
-        range: req.params.range,
-        layer: layer.name,
-        type: 'glyphs'
-      };
-      assetStorage.getGlyphs(params).then((data) => {
-        res.send(data);
-      }, (err) => {
-        console.log(err);
-        res.send(500);
-      });
-    });
-
-    app.get('/sprites/' + layer.name + ':filename', (req, res) => {
-      let params = {
-        layer: layer.name,
-        type: 'sprite',
-        filename: req.params.filename
-      };
-      assetStorage.getSprite(params).then((data) => {
-        console.log("sprite");
-        res.send(data);
-      }, (err) => {
-        console.log(err);
-        res.send(500);
-      });
-    });
-
-    app.get('/maps/' + layer.name + '/style.json', (req, res) => {
-      layerStorage.getLayers().then((layers) => {
-        res.send(JSON.stringify(layers[layer.name].style));
-      })
-    });
-  }
-};
-
-const createMBTilesLayer = (strata, layer) => {
-  console.log('Adding MBTiles layer ' + layer.name);
-  strata.layer(layer.name)
-      .route('*.png')
-      .use(disk.cache({dir: conf.dataPath + '/' + layer.name}))
-      .use(mbtiles({
-        pathname: conf.dataPath + '/' + layer.name + '.mbtiles'
-      }));
-};
-
 
 function onLayerAdd(req, res) {
   const layer = req.body;
@@ -197,16 +97,16 @@ function initTileServer() {
           const layer = Object.assign({"name": l}, layers[l]);
           switch (layer.type) {
             case "tiles":
-              createTilesLayer(strata, layer);
+              layerUtils.createTilesLayer(app, strata, layer);
               break;
             case "mbtiles":
-              createMBTilesLayer(strata, layer);
+              layerUtils.createMBTilesLayer(app, strata, layer);
               break;
             case "proxy":
               if (layer.vector) {
-                createVectorProxyLayer(strata, layer);
+                layerUtils.createVectorProxyLayer(app, strata, layer);
               } else {
-                createProxyLayer(strata, layer);
+                layerUtils.createProxyLayer(app, strata, layer);
               }
               break;
           }
@@ -230,6 +130,8 @@ function initTileServer() {
 
 layerStorage.init()
     .then(() => {
+      return assetStorage.init();
+    })
+    .then(() => {
       initTileServer();
     });
-
