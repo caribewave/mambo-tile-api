@@ -13,6 +13,9 @@ The app is listening on port 3000 by default.
 
 ## API
 
+```GET /maps/{layer}/style.json```  
+Retrieve the style.json for a vector style
+
 ```GET /maps/{layer}/{z}/{x}/{y}.png```  
 Retrieve a PNG tile from layer
 
@@ -48,6 +51,16 @@ For a retina tileset using remote TMS server
   "type": "proxy",
   "source": "http://your.tile.server/{z}/{x}/{y}@2x.png",
   "retina": true
+}
+```
+
+For a vector tileset using remote TMS server  
+```
+{
+  "name": "unique-layer-name",
+  "type": "proxy",
+  "source": "http://your.tile.server/style.json",
+  "vector": true
 }
 ```
 
