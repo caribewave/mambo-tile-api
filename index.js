@@ -13,8 +13,8 @@ let server;
 
 function onLayerAdd(req, res) {
   const layer = req.body;
-  if (!layer || !layer.type || !layer.name) {
-    return res.end(400);
+  if (!layer || !layer.type || !layer.name || !layer.label) {
+    return res.sendStatus(400);
   }
   switch (layer.type) {
     case 'mbtiles':
@@ -32,6 +32,7 @@ function onLayerAdd(req, res) {
 
   layerStorage.addLayer(Object.assign({}, {
     name: layer.name,
+    label: layer.label,
     type: layer.type,
     source: layer.source,
     retina: layer.retina,
@@ -123,8 +124,9 @@ function initTileServer() {
         app.delete('/layers/flush/:name', onLayerCacheFlush);
         server = app.listen(8081, () => console.log('App listening on port 8081!'));
       })
-      .catch(() => {
-        res.send(500);
+      .catch((err) => {
+        console.error(err);
+        throw err;
       });
 }
 
