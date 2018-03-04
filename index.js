@@ -121,7 +121,7 @@ function initTileServer() {
         app.post('/layers', bodyParser.json(), onLayerAdd);
         app.delete('/layers/:name', onLayerDelete);
         app.delete('/layers/flush/:name', onLayerCacheFlush);
-        server = app.listen(3000, () => console.log('App listening on port 3000!'));
+        server = app.listen(8081, () => console.log('App listening on port 8081!'));
       })
       .catch(() => {
         res.send(500);
