@@ -1,17 +1,18 @@
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser')
+const bodyParser = require('body-parser');
 const tilestrata = require('tilestrata');
 const proxy = require('tilestrata-proxy');
 const mbtiles = require('./lib/tilestrataMBTiles');
-const layerStorage = require('./lib/layerStorage');
+const layerStorage = require('./lib/layerService');
 const assetStorage = require('./lib/assetStorage');
 const layerUtils = require('./lib/layerUtils');
+const db = require('./lib/db');
 
 let app;
 let server;
 
-function onLayerAdd(req, res) {
+const onLayerAdd = async (req, res) => {
   const layer = req.body;
   if (!layer || !layer.type || !layer.name || !layer.label) {
     return res.sendStatus(400);
@@ -30,53 +31,41 @@ function onLayerAdd(req, res) {
       console.log('Will add proxy layer ' + layer.name);
   }
 
-  layerStorage.addLayer(Object.assign({}, {
+  await layerStorage.addLayer(Object.assign({}, {
     name: layer.name,
     label: layer.label,
     type: layer.type,
     source: layer.source,
     retina: layer.retina,
     vector: layer.vector
-  })).then(() => {
-    res.end();
-    resetTileServer();
-  });
-}
+  }));
+  res.end();
+  resetTileServer();
+};
 
-function onLayerDelete(req, res) {
+const onLayerDelete = async (req, res) => {
   if (!req.params.name) {
     return res.end(400);
   }
   console.log('Will remove layer ' + req.params.name);
-  layerStorage.deleteLayer(req.params.name).then(() => {
-    res.end();
-    resetTileServer();
-  }).catch(() => {
-    res.send(500);
-  });
+  await layerStorage.deleteLayer(req.params.name);
+  res.end();
+  resetTileServer();
+};
 
-}
-
-function onLayerCacheFlush(req, res) {
+const onLayerCacheFlush = async (req, res) => {
   if (!req.params.name) {
     return res.end(400);
   }
   console.log('Will flush cache data for layer ' + req.params.name);
-  layerStorage.flushCache(req.params.name).then(() => {
-    res.end();
-  }).catch(() => {
-    res.send(500);
-  });
+  await layerStorage.flushCache(req.params.name)
+  res.end();
+};
 
-}
-
-function onLayersGet(req, res) {
-  layerStorage.getLayersPublic().then((layers) => {
-    res.send(layers);
-  }).catch(() => {
-    res.send(500);
-  });
-}
+const onLayersGet = async (req, res) => {
+  let layers = await layerStorage.getLayers();
+  res.send(layers);
+};
 
 function resetTileServer() {
   setTimeout(() => {
@@ -90,7 +79,7 @@ function initTileServer() {
   let strata = tilestrata();
   app = express();
   app.use(cors());
-  
+
   layerStorage.getLayers()
       .then((layers) => {
         console.log('Layers retrieved');
@@ -130,10 +119,15 @@ function initTileServer() {
       });
 }
 
-layerStorage.init()
-    .then(() => {
-      return assetStorage.init();
-    })
-    .then(() => {
-      initTileServer();
-    });
+const init = async () => {
+  await db.connect();
+  await layerStorage.init();
+  await assetStorage.init();
+  initTileServer();
+};
+
+// Init server
+
+(async function() {
+  await init();
+})();
