@@ -14,32 +14,25 @@ let server;
 
 const onLayerAdd = async (req, res) => {
   const layer = req.body;
-  if (!layer || !layer.type || !layer.name || !layer.label) {
+  if (!layer || !layer.meta.type || !layer.meta.name || !layer.meta.label) {
     return res.sendStatus(400);
   }
-  switch (layer.type) {
+  switch (layer.meta.type) {
     case 'mbtiles':
-      console.log('Will add MBTiles layer ' + layer.name);
+      console.log('Will add MBTiles layer ' + layer.meta.name);
       break;
     case 'tiles':
-      console.log('Will add Tiles layer ' + layer.name);
+      console.log('Will add Tiles layer ' + layer.meta.name);
       break;
     case 'proxy':
-      if (!layer.source) {
+      if (!layer.meta.source) {
         return res.end(400);
       }
-      console.log('Will add proxy layer ' + layer.name);
+      console.log('Will add proxy layer ' + layer.meta.name);
   }
 
-  await layerStorage.addLayer(Object.assign({}, {
-    name: layer.name,
-    label: layer.label,
-    type: layer.type,
-    source: layer.source,
-    retina: layer.retina,
-    vector: layer.vector
-  }));
-  res.end();
+  await layerStorage.addLayer(layer);
+  res.sendStatus(200);
   resetTileServer();
 };
 
@@ -67,7 +60,7 @@ const onLayersGet = async (req, res) => {
   res.send(layers);
 };
 
-function resetTileServer() {
+const resetTileServer = () => {
   setTimeout(() => {
     console.log('Will reinitialize tile-server with new layer config');
     server.close();
@@ -75,59 +68,55 @@ function resetTileServer() {
   }, 500);
 }
 
-function initTileServer() {
+async function initTileServer() {
   let strata = tilestrata();
   app = express();
   app.use(cors());
 
-  layerStorage.getLayers()
-      .then((layers) => {
-        console.log('Layers retrieved');
-        for (let l in layers) {
-          const layer = Object.assign({"name": l}, layers[l]);
-          switch (layer.type) {
-            case "tiles":
-              layerUtils.createTilesLayer(app, strata, layer);
-              break;
-            case "mbtiles":
-              layerUtils.createMBTilesLayer(app, strata, layer);
-              break;
-            case "proxy":
-              if (layer.vector) {
-                layerUtils.createVectorProxyLayer(app, strata, layer);
-              } else {
-                layerUtils.createProxyLayer(app, strata, layer);
-              }
-              break;
-          }
+  const layers = await layerStorage.getLayers();
+
+  console.log('Layers retrieved');
+  for (let l in layers) {
+    const layer = layers[l];
+    switch (layer.type) {
+      case "tiles":
+        layerUtils.createTilesLayer(app, strata, layer);
+        break;
+      case "mbtiles":
+        layerUtils.createMBTilesLayer(app, strata, layer);
+        break;
+      case "proxy":
+        if (layer.vector) {
+          layerUtils.createVectorProxyLayer(app, strata, layer);
+        } else {
+          layerUtils.createProxyLayer(app, strata, layer);
         }
+        break;
+    }
+  }
 
-        app.use(tilestrata.middleware({
-          server: strata,
-          prefix: '/maps'
-        }));
+  app.use(tilestrata.middleware({
+    server: strata,
+    prefix: '/maps'
+  }));
 
-        app.get('/layers', onLayersGet);
-        app.post('/layers', bodyParser.json(), onLayerAdd);
-        app.delete('/layers/:name', onLayerDelete);
-        app.delete('/layers/flush/:name', onLayerCacheFlush);
-        server = app.listen(8081, () => console.log('App listening on port 8081!'));
-      })
-      .catch((err) => {
-        console.error(err);
-        throw err;
-      });
+  app.get('/layers', onLayersGet);
+  app.post('/layers', bodyParser.json(), onLayerAdd);
+  app.delete('/layers/:name', onLayerDelete);
+  app.delete('/layers/flush/:name', onLayerCacheFlush);
+  server = app.listen(8081, () => console.log('App listening on port 8081!'));
+
 }
 
 const init = async () => {
   await db.connect();
   await layerStorage.init();
   await assetStorage.init();
-  initTileServer();
+  await initTileServer();
 };
 
 // Init server
 
-(async function() {
+(async function () {
   await init();
 })();
