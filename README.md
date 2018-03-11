@@ -38,39 +38,53 @@ Add a new layer with following body:
 For a direct-cache tileset (FileSystem) stored in tiles/unique-layer-name  
 ```
 {
-  "name": "unique-layer-name",
-  "type": "tiles"
+  meta: {
+    "name": "unique-layer-name",
+    "type": "tiles"
+  }
 }
 ```
+**NB: this tileset will be in status "created" and will await for a tile zip archive upload**
 
 For a MBTiles tileset stored in tiles/unique-layer-name.mbtiles  
 ```
 {
-  "name": "unique-layer-name",
-  "type": "mbtiles"
+  meta: {
+    "name": "unique-layer-name",
+    "type": "mbtiles"
+  }
 }
 ```
+**NB: this tileset will be in status "created" and will await for a mbtile upload**
 
 For a retina tileset using remote TMS server  
 ```
 {
-  "name": "unique-layer-name",
-  "type": "proxy",
-  "source": "http://your.tile.server/{z}/{x}/{y}@2x.png",
-  "retina": true
+  meta: {
+    "name": "unique-layer-name",
+    "type": "proxy",
+    "source": "http://your.tile.server/{z}/{x}/{y}@2x.png",
+    "retina": true
+  }
 }
 ```
+**NB: this tileset will be in status "ready" and is able to be served directly**
 
 For a vector tileset using remote TMS server  
 ```
 {
-  "name": "unique-layer-name",
-  "type": "proxy",
-  "source": "http://your.tile.server/style.json",
-  "vector": true
+  meta: {
+    "name": "unique-layer-name",
+    "type": "proxy",
+    "source": "http://your.tile.server/style.json",
+    "vector": true
+  }
 }
 ```
+**NB: this tileset will be in status "ready" and is able to be served directly**
 
+```POST /layers/upload/{layer}```  
+Upload tiles.zip or mbtiles for specific layer
 
 ```DELETE /layers/{layer}```  
 Delete layer
