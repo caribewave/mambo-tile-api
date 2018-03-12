@@ -141,7 +141,6 @@ async function initTileServer() {
   app.get('/layers', onLayersGet);
   app.post('/layers', bodyParser.json(), onLayerAdd);
   app.post('/layers/upload/:name', mbtilesUpload, onMBTilesPost);
-  
   app.delete('/layers/:name', onLayerDelete);
   app.delete('/layers/flush/:name', onLayerCacheFlush);
   server = app.listen(8081, () => console.log('App listening on port 8081!'));
