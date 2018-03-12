@@ -116,7 +116,7 @@ async function initTileServer() {
   console.log('Layers retrieved');
   for (let l in layers) {
     const layer = layers[l];
-    switch (layer.type) {
+    switch (layer.meta.type) {
       case "tiles":
         layerUtils.createTilesLayer(app, strata, layer);
         break;
@@ -124,7 +124,7 @@ async function initTileServer() {
         layerUtils.createMBTilesLayer(app, strata, layer);
         break;
       case "proxy":
-        if (layer.vector) {
+        if (layer.meta.vector) {
           layerUtils.createVectorProxyLayer(app, strata, layer);
         } else {
           layerUtils.createProxyLayer(app, strata, layer);
