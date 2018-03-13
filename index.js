@@ -43,9 +43,8 @@ const onLayerAdd = async (req, res) => {
       }
       console.log('Will add proxy layer ' + layer.meta.name);
   }
-
-  await layerService.addLayer(layer);
-  res.sendStatus(200);
+  let result = await layerService.addLayer(layer);
+  res.send(result);
   resetTileServer();
 };
 
@@ -55,7 +54,7 @@ const onLayerDelete = async (req, res) => {
   }
   console.log('Will remove layer ' + req.params.name);
   await layerService.deleteLayer(req.params.name);
-  res.end();
+  res.send({"name": req.params.name, "deleted": true});
   resetTileServer();
 };
 
@@ -97,13 +96,22 @@ const onMBTilesPost = async (req, res, next) => {
     case 'application/octet-stream':
       console.log('Saving MBTiles layer');
       let result = await layerService.processMBTiles(layer, req.file);
-      res.send(JSON.stringify(result));
+      res.send(result);
       return;
       break;
     default:
       console.log('Received file of wrong type : ' + req.file.mimetype);
       res.status(415).send();
   }
+};
+
+
+/**
+ * Show / hide layer
+ */
+const onLayerShow = async (req, res, next) => {
+  let result = await layerService.showLayer(req.params.name, req.params.show);
+  res.send(result);
 };
 
 async function initTileServer() {
@@ -140,9 +148,10 @@ async function initTileServer() {
 
   app.get('/layers', onLayersGet);
   app.post('/layers', bodyParser.json(), onLayerAdd);
-  app.post('/layers/upload/:name', mbtilesUpload, onMBTilesPost);
+  app.post('/layers/:name/upload', mbtilesUpload, onMBTilesPost);
+  app.post('/layers/:name/show/:show', onLayerShow);
   app.delete('/layers/:name', onLayerDelete);
-  app.delete('/layers/flush/:name', onLayerCacheFlush);
+  app.delete('/layers/:name/flush', onLayerCacheFlush);
   server = app.listen(8081, () => console.log('App listening on port 8081!'));
 
 }
