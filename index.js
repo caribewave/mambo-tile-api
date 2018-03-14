@@ -9,6 +9,8 @@ const assetStorage = require('./lib/assetStorage');
 const layerUtils = require('./lib/layerUtils');
 const db = require('./lib/db');
 const multer  = require('multer');
+const Logger = require('./lib/log/Logger')();
+const Spinner = Logger.spinner();
 
 // Middleware init
 const storage = multer.diskStorage({
@@ -32,19 +34,20 @@ const onLayerAdd = async (req, res) => {
   }
   switch (layer.meta.type) {
     case 'mbtiles':
-      console.log('Will add MBTiles layer ' + layer.meta.name);
+      Spinner.start('Adding MBTiles layer ' + layer.meta.name);
       break;
     case 'tiles':
-      console.log('Will add Tiles layer ' + layer.meta.name);
+      Spinner.start('Adding Tiles layer ' + layer.meta.name);
       break;
     case 'proxy':
       if (!layer.meta.source) {
         return res.end(400);
       }
-      console.log('Will add proxy layer ' + layer.meta.name);
+      Spinner.start('Adding proxy layer ' + layer.meta.name);
   }
   let result = await layerService.addLayer(layer);
   res.send(result);
+  Spinner.succeed();
   resetTileServer();
 };
 
@@ -52,7 +55,7 @@ const onLayerDelete = async (req, res) => {
   if (!req.params.name) {
     return res.end(400);
   }
-  console.log('Will remove layer ' + req.params.name);
+  Logger.info('Removing layer ' + req.params.name);
   await layerService.deleteLayer(req.params.name);
   res.send({"name": req.params.name, "deleted": true});
   resetTileServer();
@@ -62,7 +65,7 @@ const onLayerCacheFlush = async (req, res) => {
   if (!req.params.name) {
     return res.end(400);
   }
-  console.log('Will flush cache data for layer ' + req.params.name);
+  Logger.info('Flushing cache data for layer ' + req.params.name);
   await layerService.flushCache(req.params.name)
   res.end();
 };
@@ -74,7 +77,7 @@ const onLayersGet = async (req, res) => {
 
 const resetTileServer = () => {
   setTimeout(() => {
-    console.log('Will reinitialize tile-server with new layer config');
+    Spinner.start('Reinitializing tile-server with new layer config');
     server.close();
     initTileServer();
   }, 500);
@@ -89,18 +92,18 @@ const onMBTilesPost = async (req, res, next) => {
     res.status(400).send();
     return;
   }
-  console.log('Retrieving layer ' + req.params.name);
+  Logger.info('Retrieving layer ' + req.params.name);
   let layer = await layerService.getLayer(req.params.name);
   switch (req.file.mimetype) {
     case 'application/vnd.mapbox-vector-tile':
     case 'application/octet-stream':
-      console.log('Saving MBTiles layer');
+      Logger.info('Saving MBTiles layer');
       let result = await layerService.processMBTiles(layer, req.file);
       res.send(result);
       return;
       break;
     default:
-      console.log('Received file of wrong type : ' + req.file.mimetype);
+      Logger.warn('Received file of wrong type : ' + req.file.mimetype);
       res.status(415).send();
   }
 };
@@ -121,7 +124,7 @@ async function initTileServer() {
 
   const layers = await layerService.getLayers();
 
-  console.log('Layers retrieved');
+  Spinner.start('Layers retrieved');
   for (let l in layers) {
     const layer = layers[l];
     switch (layer.meta.type) {
@@ -152,14 +155,22 @@ async function initTileServer() {
   app.post('/layers/:name/show/:show', onLayerShow);
   app.delete('/layers/:name', onLayerDelete);
   app.delete('/layers/:name/flush', onLayerCacheFlush);
-  server = app.listen(8081, () => console.log('App listening on port 8081!'));
-
+  server = app.listen(8081, () => Logger.info('App listening on port 8081!'));
+  Spinner.succeed();
 }
 
 const init = async () => {
+  Logger.info('Initializing app');
+  Spinner.start('Connecting to Database');
   await db.connect();
+  Spinner.succeed();
+  Spinner.start('Initializing Layer Service');
   await layerService.init();
+  Spinner.succeed();
+  Spinner.start('Initializing Storage');
   await assetStorage.init();
+  Spinner.succeed();
+  Spinner.start('Initializing Tile Service');
   await initTileServer();
 };
 
