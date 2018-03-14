@@ -17,10 +17,10 @@ module.exports = {
       "source": "https://tile.jawg.io/jawg-streets.json?access-token=community"
     },
     "jawg": {
-      "label": "Jawg Streets",
+      "label": "Jawg Dark",
       "type": "proxy",
       "retina": true,
-      "source": "http://tile.jawg.io/jawg-streets/{z}/{x}/{y}@2x.png?access-token=community"
+      "source": "http://tile.jawg.io/jawg-dark/{z}/{x}/{y}@2x.png?access-token=community"
     },
     "osm": {
       "label": "OpenStreetMap",
