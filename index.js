@@ -45,10 +45,55 @@ const onLayerAdd = async (req, res) => {
       }
       Spinner.start('Adding proxy layer ' + layer.meta.name);
   }
-  let result = await layerService.addLayer(layer);
-  res.send(result);
-  Spinner.succeed();
-  resetTileServer();
+  try {
+    let result = await layerService.addLayer(layer);
+    res.send(result);
+    Spinner.succeed();
+    resetTileServer();
+  } catch (err) {
+    if (err.message) {
+      res.status(400).send(err);
+    } else {
+      res.sendStatus(500);
+    }
+  }
+  
+  
+};
+
+
+const onLayerUpdate = async (req, res) => {
+  const layer = req.body;
+  if (!layer || !layer.meta.type || !layer.meta.name || !layer.meta.label) {
+    return res.sendStatus(400);
+  }
+  switch (layer.meta.type) {
+    case 'mbtiles':
+      Spinner.start('Updating MBTiles layer ' + layer.meta.name);
+      break;
+    case 'tiles':
+      Spinner.start('Updating Tiles layer ' + layer.meta.name);
+      break;
+    case 'proxy':
+      if (!layer.meta.source) {
+        return res.end(400);
+      }
+      Spinner.start('Updating proxy layer ' + layer.meta.name);
+  }
+  try {
+    let result = await layerService.updateLayer(layer);
+    res.send(result);
+    Spinner.succeed();
+    resetTileServer();
+  } catch (err) {
+    if (err.message) {
+      res.status(400).send(err);
+    } else {
+      res.sendStatus(500);
+    }
+  }
+
+
 };
 
 const onLayerDelete = async (req, res) => {
@@ -151,6 +196,7 @@ async function initTileServer() {
 
   app.get('/layers', onLayersGet);
   app.post('/layers', bodyParser.json(), onLayerAdd);
+  app.put('/layers', bodyParser.json(), onLayerUpdate);
   app.post('/layers/:name/upload', mbtilesUpload, onMBTilesPost);
   app.post('/layers/:name/show/:show', onLayerShow);
   app.delete('/layers/:name', onLayerDelete);
